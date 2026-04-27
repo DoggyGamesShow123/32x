@@ -3,90 +3,37 @@
   <head>
     <meta charset="UTF-8">
     <title>Genesis</title>
-
-    <meta name="viewport"
-      content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+    <link
+      rel="icon"
+      sizes="16x16"
+      type="rom/png"
+      href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IB2cksfwAAAARnQU1BAACxjwv8YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAelJREFUOMulk71rk1EUxn/n3rfREO1QKEYoeV+H4qRQsSiK+NlFSEFLkk6CxeLgKC7iP+AoSBEHB3HQWqKtCR1qXWrBDoqDokMQEvrhByiUJoU3fe9xqApNQyP0jPec+5yH38OBbZZs1fQzz5OIPSzG7lEXrYC+LY/2l1oKBLlCDpHrIL2bu1pC9U64vDCyOHnVbRBIDYx1mLb4Y5C+lt5VZ129et4LcsXbCAl17r0YexPY1+LnR+DWWvXby/nC0IqHcBmkU4z9H2bzLqz1VfKZpb8PBnjWsGFOXXRCNToHutwg0GViiYVgsDjtZ8cPrguoK4DO/RmourCaLo+mX5efpKdR7jdPTs6IaZvxsxMHPMTuRaMriJ1CdaaSz/4IcoWUotdAP2+RdLsYe89DXV3BCDoP+mZ9h+kUuKFROCw21ghxCdURddE70J+eqnslYo4BSXVRAcCtrX4xXryKsd1N4ptyUfigMnZxEcCImK/AWeA70OtnxhOVsYFfrl47KWKHNhMwl4y385Ofe9ED4KmrJ8XGUiCB2LZHgAsGi6sgiS3ibBcxd4Hj/wj52QlfxOYROdTg+QPKJCIlIEJ1F3AEkVMahUc3IO7oGZbd3enTImY/IjWNwtny0wulZha6+h9aL96xY7vXzG+Ysr1YzfUBigAAAABJRU5ErkJggg=="
+    >
+    <meta name="theme-color" content="#000">
+    <meta name="description" content="JavaScript Sega Genesis Emulator.">
+    <meta name="keywords" content="javascript, sega, genesis, emulator">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 
     <style>
       *{scrollbar-width:none;-ms-overflow-style:none}
       *::-webkit-scrollbar{display:none}
-
-      html,body{
-        padding:0;
-        margin:0;
-        overscroll-behavior:none;
-        background-color:#000;
-        touch-action:none;
-        user-select:none;
-        -webkit-user-select:none;
-        -webkit-tap-highlight-color:transparent
-      }
-
+      html,body{padding:0;margin:0;overscroll-behavior:none;background-color:#000;touch-action:none;user-select:none;-moz-user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
       #container{display:none}
       input[type=file]{display:none}
-
-      #demo-loader,#file-selector{
-        position:fixed;
-        inset:0;
-        width:20vw;
-        height:20vw;
-        margin:auto;
-        cursor:pointer;
-        background:transparent;
-        border:0;
-        outline:0
-      }
-
-      #demo-loader:hover,#file-selector:hover{
-        filter:brightness(110%)
-      }
-
+      #email{position:fixed;right:0;bottom:0;padding-right:15px;line-height:3.2;font-family:Arial;font-size:16px;color:#fff}
       #game{width:100vw;height:100vh}
-
-      .pleasewait{
-        position:fixed;
-        width:64px;
-        height:64px;
-        inset:0;
-        margin:auto
-      }
-
-      .lds-spinner{
-        color:#fff;
-        display:inline-block;
-        position:relative;
-        width:64px;
-        height:64px
-      }
-
-      .lds-spinner div{
-        transform-origin:32px 32px;
-        animation:lds-spinner 1.2s linear infinite
-      }
-
-      .lds-spinner div:after{
-        content:" ";
-        display:block;
-        position:absolute;
-        top:3px;
-        left:29px;
-        width:5px;
-        height:14px;
-        border-radius:20%;
-        background:#fff
-      }
-
-      @keyframes lds-spinner{
-        0%{opacity:1}
-        100%{opacity:0}
-      }
+      .pleasewait{position:fixed;width:64px;height:64px;left:0;right:0;top:0;bottom:0;margin:auto}
+      .lds-spinner{color:#fff;display:inline-block;position:relative;width:64px;height:64px}
+      .lds-spinner div{transform-origin:32px 32px;animation:lds-spinner 1.2s linear infinite}
+      .lds-spinner div:after{content:" ";display:block;position:absolute;top:3px;left:29px;width:5px;height:14px;border-radius:20%;background:#fff}
+      @keyframes lds-spinner{0%{opacity:1}to{opacity:0}}
     </style>
   </head>
 
   <body>
     <div id="game"></div>
 
-    <div class="pleasewait" id="pleaseWait">
+    <div class="pleasewait">
       <div class="lds-spinner">
         <div></div><div></div><div></div><div></div><div></div><div></div>
         <div></div><div></div><div></div><div></div><div></div><div></div>
@@ -94,13 +41,12 @@
     </div>
 
     <div id="container">
+      <div id="email"><a href="mailto:info@lrusso.com">info@lrusso.com</a></div>
       <button id="demo-loader"></button>
       <button id="file-selector"></button>
-      <input type="file" id="romfile-input"
-        accept=".32x,.bin,.md,application/octet-stream">
+      <input type="file" id="romfile-input" accept=".32x,.bin,.md,application/octet-stream">
     </div>
 
-    <!-- ✅ ORIGINAL SCRIPT LOAD (FIXED) -->
     <script src="Genesis.min.js"></script>
 
     <script>
@@ -108,44 +54,41 @@
       var demoLoader = document.getElementById("demo-loader")
       var fileSelector = document.getElementById("file-selector")
       var romFileInput = document.getElementById("romfile-input")
-      var pleaseWait = document.getElementById("pleaseWait")
+      var pleaseWait = document.querySelector(".pleasewait")
 
-      function isMobileDevice(){
-        return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      function isMobileDevice() {
+        return !!(
+          navigator.userAgent.match(/Android/i) ||
+          navigator.userAgent.match(/iPhone/i) ||
+          navigator.userAgent.match(/iPad/i) ||
+          navigator.userAgent.match(/iPod/i)
+        )
       }
 
       window.addEventListener("load", function () {
         container.style.display = "block"
-        pleaseWait.style.display = "none"
 
-        var params = new URLSearchParams(location.search)
-        var demoRequired = params.has("demo")
+        var currentURL = new URL(window.location.href).searchParams
+        var demoRequired = currentURL.has("demo")
 
         if (demoRequired) {
           demoLoader.style.display = "block"
-
-          // ✅ AUTO‑START DEMO (ORIGINAL BUG FIX)
-          setTimeout(function(){
-            demoLoader.click()
-          }, 0)
-
+          demoLoader.tabIndex = 1
         } else {
           fileSelector.style.display = "block"
+          fileSelector.tabIndex = 1
         }
 
         demoLoader.addEventListener("click", function () {
           container.style.display = "none"
-          pleaseWait.style.display = "block"
 
-          // ✅ DEMO ROM REPLACED
           var gameURL =
             "https://github.com/DoggyGamesShow123/32x/raw/refs/heads/main/knuckles.32x"
 
           var xhr = new XMLHttpRequest()
           xhr.open("GET", gameURL, true)
           xhr.responseType = "arraybuffer"
-
-          xhr.onreadystatechange = function () {
+          xhr.addEventListener("readystatechange", function () {
             if (xhr.readyState === 4 && xhr.status === 200) {
               embedGenesis({
                 container: "game",
@@ -158,40 +101,14 @@
                 }
               })
             }
-          }
-
+          })
           xhr.send(null)
         })
 
         fileSelector.addEventListener("click", function () {
           romFileInput.click()
         })
-
-        romFileInput.addEventListener("change", function (e) {
-          var file = e.target.files[0]
-          if (!file) return
-
-          container.style.display = "none"
-          pleaseWait.style.display = "block"
-
-          var reader = new FileReader()
-          reader.onload = function () {
-            embedGenesis({
-              container: "game",
-              name: file.name,
-              rom: reader.result,
-              soundEnabled: true,
-              showMobileControls: isMobileDevice(),
-              cbStarted: function () {
-                pleaseWait.style.display = "none"
-              }
-            })
-          }
-
-          reader.readAsArrayBuffer(file)
-        })
       })
     </script>
   </body>
 </html>
-``
