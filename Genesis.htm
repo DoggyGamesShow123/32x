@@ -3,31 +3,90 @@
   <head>
     <meta charset="UTF-8">
     <title>Genesis</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+
+    <meta name="viewport"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 
     <style>
       *{scrollbar-width:none;-ms-overflow-style:none}
       *::-webkit-scrollbar{display:none}
 
-      html,body{padding:0;margin:0;overscroll-behavior:none;background-color:#000;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+      html,body{
+        padding:0;
+        margin:0;
+        overscroll-behavior:none;
+        background-color:#000;
+        touch-action:none;
+        user-select:none;
+        -webkit-user-select:none;
+        -webkit-tap-highlight-color:transparent
+      }
 
       #container{display:none}
       input[type=file]{display:none}
 
+      #demo-loader,#file-selector{
+        position:fixed;
+        inset:0;
+        width:20vw;
+        height:20vw;
+        margin:auto;
+        cursor:pointer;
+        background:transparent;
+        border:0;
+        outline:0
+      }
+
+      #demo-loader:hover,#file-selector:hover{
+        filter:brightness(110%)
+      }
+
       #game{width:100vw;height:100vh}
 
-      .pleasewait{position:fixed;width:64px;height:64px;left:0;right:0;top:0;bottom:0;margin:auto auto;border:0}
-      .lds-spinner{color:#fff;display:inline-block;position:relative;width:64px;height:64px}
-      .lds-spinner div{transform-origin:32px 32px;animation:lds-spinner 1.2s linear infinite}
-      .lds-spinner div:after{content:" ";display:block;position:absolute;top:3px;left:29px;width:5px;height:14px;border-radius:20%;background:#fff}
-      @keyframes lds-spinner{0%{opacity:1}to{opacity:0}}
+      .pleasewait{
+        position:fixed;
+        width:64px;
+        height:64px;
+        inset:0;
+        margin:auto
+      }
+
+      .lds-spinner{
+        color:#fff;
+        display:inline-block;
+        position:relative;
+        width:64px;
+        height:64px
+      }
+
+      .lds-spinner div{
+        transform-origin:32px 32px;
+        animation:lds-spinner 1.2s linear infinite
+      }
+
+      .lds-spinner div:after{
+        content:" ";
+        display:block;
+        position:absolute;
+        top:3px;
+        left:29px;
+        width:5px;
+        height:14px;
+        border-radius:20%;
+        background:#fff
+      }
+
+      @keyframes lds-spinner{
+        0%{opacity:1}
+        100%{opacity:0}
+      }
     </style>
   </head>
 
   <body>
     <div id="game"></div>
 
-    <div class="pleasewait">
+    <div class="pleasewait" id="pleaseWait">
       <div class="lds-spinner">
         <div></div><div></div><div></div><div></div><div></div><div></div>
         <div></div><div></div><div></div><div></div><div></div><div></div>
@@ -35,11 +94,13 @@
     </div>
 
     <div id="container">
-      <button id="demo-loader">DEMO</button>
-      <button id="file-selector">LOAD</button>
-      <input type="file" id="romfile-input" accept=".32x,.bin,.md">
+      <button id="demo-loader"></button>
+      <button id="file-selector"></button>
+      <input type="file" id="romfile-input"
+        accept=".32x,.bin,.md,application/octet-stream">
     </div>
 
+    <!-- ✅ ORIGINAL SCRIPT LOAD (FIXED) -->
     <script src="Genesis.min.js"></script>
 
     <script>
@@ -47,24 +108,27 @@
       var demoLoader = document.getElementById("demo-loader")
       var fileSelector = document.getElementById("file-selector")
       var romFileInput = document.getElementById("romfile-input")
-      var pleaseWait = document.querySelector(".pleasewait")
+      var pleaseWait = document.getElementById("pleaseWait")
 
-      function isMobileDevice() {
+      function isMobileDevice(){
         return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
       }
 
       window.addEventListener("load", function () {
         container.style.display = "block"
-        pleaseWait.style.display = "none" // ✅ FIX 1: stop fake loading
+        pleaseWait.style.display = "none"
 
-        var currentURL = new URL(window.location.href).searchParams
-        var demoRequired = currentURL.has("demo")
+        var params = new URLSearchParams(location.search)
+        var demoRequired = params.has("demo")
 
         if (demoRequired) {
           demoLoader.style.display = "block"
-          setTimeout(function () {
-            demoLoader.click() // ✅ FIX 2: auto‑start demo
+
+          // ✅ AUTO‑START DEMO (ORIGINAL BUG FIX)
+          setTimeout(function(){
+            demoLoader.click()
           }, 0)
+
         } else {
           fileSelector.style.display = "block"
         }
@@ -73,12 +137,14 @@
           container.style.display = "none"
           pleaseWait.style.display = "block"
 
+          // ✅ DEMO ROM REPLACED
           var gameURL =
             "https://github.com/DoggyGamesShow123/32x/raw/refs/heads/main/knuckles.32x"
 
           var xhr = new XMLHttpRequest()
           xhr.open("GET", gameURL, true)
           xhr.responseType = "arraybuffer"
+
           xhr.onreadystatechange = function () {
             if (xhr.readyState === 4 && xhr.status === 200) {
               embedGenesis({
@@ -89,17 +155,43 @@
                 showMobileControls: isMobileDevice(),
                 cbStarted: function () {
                   pleaseWait.style.display = "none"
-                },
+                }
               })
             }
           }
+
           xhr.send(null)
         })
 
         fileSelector.addEventListener("click", function () {
           romFileInput.click()
         })
+
+        romFileInput.addEventListener("change", function (e) {
+          var file = e.target.files[0]
+          if (!file) return
+
+          container.style.display = "none"
+          pleaseWait.style.display = "block"
+
+          var reader = new FileReader()
+          reader.onload = function () {
+            embedGenesis({
+              container: "game",
+              name: file.name,
+              rom: reader.result,
+              soundEnabled: true,
+              showMobileControls: isMobileDevice(),
+              cbStarted: function () {
+                pleaseWait.style.display = "none"
+              }
+            })
+          }
+
+          reader.readAsArrayBuffer(file)
+        })
       })
     </script>
   </body>
 </html>
+``
