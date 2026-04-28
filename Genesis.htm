@@ -16,17 +16,30 @@ html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
   margin: auto; width: 200px; height: 200px;
   display: none; cursor: pointer;
 }
+/* Overlay shown when a gamepad is detected but audio needs unlocking */
+#gp-audio-prompt {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  color: #fff; font: bold 20px sans-serif;
+  justify-content: center; align-items: center;
+  text-align: center; z-index: 9999;
+  cursor: pointer;
+}
+#gp-audio-prompt span { pointer-events: none; }
 #gamepad-status {
   position: fixed; bottom: 8px; left: 8px;
   color: #fff; font: 12px monospace;
   opacity: 0; transition: opacity 1s;
-  pointer-events: none; z-index: 9999;
+  pointer-events: none; z-index: 9998;
 }
 input[type=file] { display: none; }
 </style>
 </head>
 <body>
+
 <div id="game"></div>
+
 <div id="loader">
   <svg width="64" height="64" viewBox="0 0 100 100">
     <circle cx="50" cy="50" r="40" stroke="#fff" stroke-width="10" fill="none"
@@ -36,6 +49,7 @@ input[type=file] { display: none; }
     </circle>
   </svg>
 </div>
+
 <button id="upload-box">
   <svg width="100%" height="100%" viewBox="0 0 502 502">
     <circle fill="#FFF" cx="250" cy="250" r="200"/>
@@ -49,16 +63,29 @@ input[type=file] { display: none; }
       c0-5.743,4.643-10.399,10.37-10.399S391,301.47,391,307.213V380.147z"/>
   </svg>
 </button>
+
 <input type="file" id="romfile" accept=".32x,.bin,.md">
+
+<!-- Shown when gamepad connects before the user has clicked anything -->
+<div id="gp-audio-prompt">
+  <span>🎮 Controller connected!<br><br>Click or tap here to<br>enable audio &amp; start playing</span>
+</div>
+
 <div id="gamepad-status"></div>
 
 <script src="Genesis.min.js"></script>
 <script>
-var loader    = document.getElementById("loader");
-var uploadBox = document.getElementById("upload-box");
-var romInput  = document.getElementById("romfile");
-var gpStatus  = document.getElementById("gamepad-status");
-var gpFadeTimer = null;
+var loader       = document.getElementById("loader");
+var uploadBox    = document.getElementById("upload-box");
+var romInput     = document.getElementById("romfile");
+var gpStatus     = document.getElementById("gamepad-status");
+var audioPrompt  = document.getElementById("gp-audio-prompt");
+var gpFadeTimer  = null;
+
+// Track whether the user has already performed a gesture (unlocks AudioContext)
+var audioUnlocked = false;
+// Track whether the gamepad poll loop is running
+var pollRunning = false;
 
 function showGamepadMsg(msg) {
   gpStatus.textContent = msg;
@@ -71,7 +98,7 @@ function isMobile() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-// ── Default key bindings (mirrors README defaults) ────────────────────────
+// ── Default key bindings ──────────────────────────────────────────────────
 var DEFAULT_PLAYER1 = {
   up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
   start: "Enter", mode: "KeyZ",
@@ -85,32 +112,26 @@ var DEFAULT_PLAYER2 = {
   x: "KeyU", y: "KeyO", z: "KeyP"
 };
 
-// ── Standard Gamepad button → Genesis action ──────────────────────────────
-// Standard mapping: https://w3c.github.io/gamepad/#remapping
-// Buttons: 0=A(cross) 1=B(circle) 2=X(square) 3=Y(tri)
-//          4=LB 5=RB 6=LT 7=RT 8=Select/Back 9=Start
-//          12=DUp 13=DDown 14=DLeft 15=DRight
+// Standard Gamepad button index → Genesis action
 var BUTTON_MAP = [
-  /* 0  cross/A  */ "b",
-  /* 1  circle/B */ "c",
-  /* 2  square/X */ "a",
-  /* 3  tri/Y    */ "x",
-  /* 4  LB       */ "y",
-  /* 5  RB       */ "z",
-  /* 6  LT       */ "mode",
-  /* 7  RT       */ "mode",
-  /* 8  select   */ "mode",
-  /* 9  start    */ "start",
-  /* 10 L3       */ null,
-  /* 11 R3       */ null,
-  /* 12 d-up     */ "up",
-  /* 13 d-down   */ "down",
-  /* 14 d-left   */ "left",
-  /* 15 d-right  */ "right"
+  "b",     // 0  Cross / A
+  "c",     // 1  Circle / B
+  "a",     // 2  Square / X
+  "x",     // 3  Triangle / Y
+  "y",     // 4  L1 / LB
+  "z",     // 5  R1 / RB
+  "mode",  // 6  L2 / LT
+  "mode",  // 7  R2 / RT
+  "mode",  // 8  Select / Back
+  "start", // 9  Start
+  null,    // 10 L3
+  null,    // 11 R3
+  "up",    // 12 D-pad up
+  "down",  // 13 D-pad down
+  "left",  // 14 D-pad left
+  "right"  // 15 D-pad right
 ];
 
-// ── Gamepad polling state ─────────────────────────────────────────────────
-// pressed[playerIndex][buttonIndex] = true/false
 var gpPressed = [{}, {}];
 
 function fireKey(code, down) {
@@ -123,6 +144,7 @@ function fireKey(code, down) {
 function pollGamepads() {
   var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
   var playerKeys = [DEFAULT_PLAYER1, DEFAULT_PLAYER2];
+  var DEAD = 0.4;
 
   for (var gp = 0; gp < Math.min(gamepads.length, 2); gp++) {
     var pad = gamepads[gp];
@@ -130,11 +152,10 @@ function pollGamepads() {
 
     var keys = playerKeys[gp];
 
-    // ── Buttons ───────────────────────────────────────────────────────────
+    // Buttons
     for (var b = 0; b < pad.buttons.length; b++) {
       var action = BUTTON_MAP[b];
       if (!action || !keys[action]) continue;
-
       var isDown = pad.buttons[b].pressed;
       if (isDown !== gpPressed[gp][b]) {
         gpPressed[gp][b] = isDown;
@@ -142,52 +163,84 @@ function pollGamepads() {
       }
     }
 
-    // ── Left analogue stick axes (axis 0 = X, axis 1 = Y) ────────────────
-    var DEAD = 0.4;
+    // Left analogue stick
     var ax = pad.axes[0] || 0;
     var ay = pad.axes[1] || 0;
 
-    // Left
-    var wantLeft = ax < -DEAD;
-    if (wantLeft !== !!gpPressed[gp]["axis_left"]) {
-      gpPressed[gp]["axis_left"] = wantLeft;
-      fireKey(keys["left"], wantLeft);
-    }
-    // Right
-    var wantRight = ax > DEAD;
-    if (wantRight !== !!gpPressed[gp]["axis_right"]) {
-      gpPressed[gp]["axis_right"] = wantRight;
-      fireKey(keys["right"], wantRight);
-    }
-    // Up
-    var wantUp = ay < -DEAD;
-    if (wantUp !== !!gpPressed[gp]["axis_up"]) {
-      gpPressed[gp]["axis_up"] = wantUp;
-      fireKey(keys["up"], wantUp);
-    }
-    // Down
-    var wantDown = ay > DEAD;
-    if (wantDown !== !!gpPressed[gp]["axis_down"]) {
-      gpPressed[gp]["axis_down"] = wantDown;
-      fireKey(keys["down"], wantDown);
-    }
+    var wantLeft  = ax < -DEAD;
+    var wantRight = ax >  DEAD;
+    var wantUp    = ay < -DEAD;
+    var wantDown  = ay >  DEAD;
+
+    if (wantLeft  !== !!gpPressed[gp]["axis_left"])  { gpPressed[gp]["axis_left"]  = wantLeft;  fireKey(keys["left"],  wantLeft);  }
+    if (wantRight !== !!gpPressed[gp]["axis_right"]) { gpPressed[gp]["axis_right"] = wantRight; fireKey(keys["right"], wantRight); }
+    if (wantUp    !== !!gpPressed[gp]["axis_up"])    { gpPressed[gp]["axis_up"]    = wantUp;    fireKey(keys["up"],    wantUp);    }
+    if (wantDown  !== !!gpPressed[gp]["axis_down"])  { gpPressed[gp]["axis_down"]  = wantDown;  fireKey(keys["down"],  wantDown);  }
   }
 
   requestAnimationFrame(pollGamepads);
 }
 
-// ── Gamepad connect / disconnect events ───────────────────────────────────
+function startPollingIfNeeded() {
+  if (!pollRunning) {
+    pollRunning = true;
+    requestAnimationFrame(pollGamepads);
+  }
+}
+
+// ── Audio unlock helper ───────────────────────────────────────────────────
+// Called on any real user gesture so the browser allows AudioContext to run.
+function markAudioUnlocked() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  audioPrompt.style.display = "none";
+  // Try to resume any suspended AudioContext the emulator may have created
+  try {
+    var ctxNames = ["AudioContext", "webkitAudioContext"];
+    for (var i = 0; i < ctxNames.length; i++) {
+      if (window[ctxNames[i]]) {
+        // Monkey-patch constructor so future contexts auto-resume too
+        var Original = window[ctxNames[i]];
+        window[ctxNames[i]] = function() {
+          var ctx = new Original();
+          if (ctx.state === "suspended") { ctx.resume(); }
+          return ctx;
+        };
+        break;
+      }
+    }
+  } catch(e) {}
+  startPollingIfNeeded();
+}
+
+// Any click/tap/keypress on the page counts as unlocking audio
+document.addEventListener("click",    markAudioUnlocked, { once: true });
+document.addEventListener("touchend", markAudioUnlocked, { once: true });
+document.addEventListener("keydown",  markAudioUnlocked, { once: true });
+
+// The prompt overlay itself is also a click target
+audioPrompt.addEventListener("click", function() {
+  markAudioUnlocked();
+});
+
+// ── Gamepad connect / disconnect ──────────────────────────────────────────
 window.addEventListener("gamepadconnected", function(e) {
   showGamepadMsg("🎮 Controller " + (e.gamepad.index + 1) + " connected: " + e.gamepad.id);
-  console.log("Gamepad connected:", e.gamepad.id);
+  if (!audioUnlocked) {
+    // Show the prompt so the user performs a gesture to unlock audio
+    audioPrompt.style.display = "flex";
+  } else {
+    startPollingIfNeeded();
+  }
 });
+
 window.addEventListener("gamepaddisconnected", function(e) {
   showGamepadMsg("🎮 Controller " + (e.gamepad.index + 1) + " disconnected");
   gpPressed[e.gamepad.index] = {};
+  if (audioPrompt.style.display === "flex") {
+    audioPrompt.style.display = "none";
+  }
 });
-
-// Start polling immediately (works even before ROM loads)
-requestAnimationFrame(pollGamepads);
 
 // ── ROM loading ───────────────────────────────────────────────────────────
 function startROM(name, data) {
