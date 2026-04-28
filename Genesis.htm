@@ -4,77 +4,192 @@
 <meta charset="UTF-8">
 <title>Genesis</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: #000;
-    overflow: hidden;
-  }
-  #game {
-    width: 100vw;
-    height: 100vh;
-  }
-  #loader {
-    position: fixed;
-    width: 64px;
-    height: 64px;
-    left: 0; right: 0; top: 0; bottom: 0;
-    margin: auto;
-  }
-  #upload-box {
-    position: fixed;
-    left: 0; right: 0; top: 0; bottom: 0;
-    margin: auto;
-    width: 200px;
-    height: 200px;
-    display: none;
-    cursor: pointer;
-  }
-  input[type=file] { display: none; }
+html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+#game { width: 100vw; height: 100vh; }
+#loader {
+  position: fixed; width: 64px; height: 64px;
+  left: 0; right: 0; top: 0; bottom: 0; margin: auto;
+}
+#upload-box {
+  position: fixed; left: 0; right: 0; top: 0; bottom: 0;
+  margin: auto; width: 200px; height: 200px;
+  display: none; cursor: pointer;
+}
+#gamepad-status {
+  position: fixed; bottom: 8px; left: 8px;
+  color: #fff; font: 12px monospace;
+  opacity: 0; transition: opacity 1s;
+  pointer-events: none; z-index: 9999;
+}
+input[type=file] { display: none; }
 </style>
 </head>
-
 <body>
-
 <div id="game"></div>
-
 <div id="loader">
   <svg width="64" height="64" viewBox="0 0 100 100">
-    <circle cx="50" cy="50" r="40" stroke="#fff" stroke-width="10" fill="none" stroke-dasharray="200" stroke-linecap="round">
-      <animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" from="0 50 50" to="360 50 50"/>
+    <circle cx="50" cy="50" r="40" stroke="#fff" stroke-width="10" fill="none"
+      stroke-dasharray="200" stroke-linecap="round">
+      <animateTransform attributeName="transform" type="rotate" dur="1s"
+        repeatCount="indefinite" from="0 50 50" to="360 50 50"/>
     </circle>
   </svg>
 </div>
-
 <button id="upload-box">
   <svg width="100%" height="100%" viewBox="0 0 502 502">
-    <circle fill="#FFF" cx="250" cy="250" r="200" />
+    <circle fill="#FFF" cx="250" cy="250" r="200"/>
     <path fill="#b9180b"
       d="M251,1C112.929,1,1,112.929,1,251s111.929,250,250,250s250-111.929,250-250S389.071,1,251,1z
-         M251.283,111.853L351,236.738h-56.935v73.761H208.51v-73.761h-56.941L251.283,111.853z
-         M208.51,336.122v-19.418h85.556v19.418H208.51z
-         M294.065,341.665v10.186H208.51v-10.186H294.065z
-         M391,380.147c0,5.522-4.477,10-10,10H121c-5.523,0-10-4.478-10-10
-         v-72.935c0-5.743,4.643-10.399,10.37-10.399s10.37,4.656,10.37,10.399v62.194h238.52v-62.194
-         c0-5.743,4.643-10.399,10.37-10.399S391,301.47,391,307.213V380.147z" />
+      M251.283,111.853L351,236.738h-56.935v73.761H208.51v-73.761h-56.941L251.283,111.853z
+      M208.51,336.122v-19.418h85.556v19.418H208.51z
+      M294.065,341.665v10.186H208.51v-10.186H294.065z
+      M391,380.147c0,5.522-4.477,10-10,10H121c-5.523,0-10-4.478-10-10
+      v-72.935c0-5.743,4.643-10.399,10.37-10.399s10.37,4.656,10.37,10.399v62.194h238.52v-62.194
+      c0-5.743,4.643-10.399,10.37-10.399S391,301.47,391,307.213V380.147z"/>
   </svg>
 </button>
-
 <input type="file" id="romfile" accept=".32x,.bin,.md">
+<div id="gamepad-status"></div>
 
 <script src="Genesis.min.js"></script>
-
 <script>
-const loader = document.getElementById("loader");
-const uploadBox = document.getElementById("upload-box");
-const romInput = document.getElementById("romfile");
+var loader    = document.getElementById("loader");
+var uploadBox = document.getElementById("upload-box");
+var romInput  = document.getElementById("romfile");
+var gpStatus  = document.getElementById("gamepad-status");
+var gpFadeTimer = null;
+
+function showGamepadMsg(msg) {
+  gpStatus.textContent = msg;
+  gpStatus.style.opacity = "1";
+  clearTimeout(gpFadeTimer);
+  gpFadeTimer = setTimeout(function() { gpStatus.style.opacity = "0"; }, 3000);
+}
 
 function isMobile() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
+// ── Default key bindings (mirrors README defaults) ────────────────────────
+var DEFAULT_PLAYER1 = {
+  up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
+  start: "Enter", mode: "KeyZ",
+  a: "KeyA", b: "KeyS", c: "KeyD",
+  x: "KeyQ", y: "KeyW", z: "KeyE"
+};
+var DEFAULT_PLAYER2 = {
+  up: "KeyI", down: "KeyK", left: "KeyJ", right: "KeyL",
+  start: "KeyH", mode: "KeyV",
+  a: "KeyB", b: "KeyN", c: "KeyM",
+  x: "KeyU", y: "KeyO", z: "KeyP"
+};
+
+// ── Standard Gamepad button → Genesis action ──────────────────────────────
+// Standard mapping: https://w3c.github.io/gamepad/#remapping
+// Buttons: 0=A(cross) 1=B(circle) 2=X(square) 3=Y(tri)
+//          4=LB 5=RB 6=LT 7=RT 8=Select/Back 9=Start
+//          12=DUp 13=DDown 14=DLeft 15=DRight
+var BUTTON_MAP = [
+  /* 0  cross/A  */ "b",
+  /* 1  circle/B */ "c",
+  /* 2  square/X */ "a",
+  /* 3  tri/Y    */ "x",
+  /* 4  LB       */ "y",
+  /* 5  RB       */ "z",
+  /* 6  LT       */ "mode",
+  /* 7  RT       */ "mode",
+  /* 8  select   */ "mode",
+  /* 9  start    */ "start",
+  /* 10 L3       */ null,
+  /* 11 R3       */ null,
+  /* 12 d-up     */ "up",
+  /* 13 d-down   */ "down",
+  /* 14 d-left   */ "left",
+  /* 15 d-right  */ "right"
+];
+
+// ── Gamepad polling state ─────────────────────────────────────────────────
+// pressed[playerIndex][buttonIndex] = true/false
+var gpPressed = [{}, {}];
+
+function fireKey(code, down) {
+  var evt = new KeyboardEvent(down ? "keydown" : "keyup", {
+    bubbles: true, cancelable: true, code: code, key: code
+  });
+  document.dispatchEvent(evt);
+}
+
+function pollGamepads() {
+  var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+  var playerKeys = [DEFAULT_PLAYER1, DEFAULT_PLAYER2];
+
+  for (var gp = 0; gp < Math.min(gamepads.length, 2); gp++) {
+    var pad = gamepads[gp];
+    if (!pad || !pad.connected) continue;
+
+    var keys = playerKeys[gp];
+
+    // ── Buttons ───────────────────────────────────────────────────────────
+    for (var b = 0; b < pad.buttons.length; b++) {
+      var action = BUTTON_MAP[b];
+      if (!action || !keys[action]) continue;
+
+      var isDown = pad.buttons[b].pressed;
+      if (isDown !== gpPressed[gp][b]) {
+        gpPressed[gp][b] = isDown;
+        fireKey(keys[action], isDown);
+      }
+    }
+
+    // ── Left analogue stick axes (axis 0 = X, axis 1 = Y) ────────────────
+    var DEAD = 0.4;
+    var ax = pad.axes[0] || 0;
+    var ay = pad.axes[1] || 0;
+
+    // Left
+    var wantLeft = ax < -DEAD;
+    if (wantLeft !== !!gpPressed[gp]["axis_left"]) {
+      gpPressed[gp]["axis_left"] = wantLeft;
+      fireKey(keys["left"], wantLeft);
+    }
+    // Right
+    var wantRight = ax > DEAD;
+    if (wantRight !== !!gpPressed[gp]["axis_right"]) {
+      gpPressed[gp]["axis_right"] = wantRight;
+      fireKey(keys["right"], wantRight);
+    }
+    // Up
+    var wantUp = ay < -DEAD;
+    if (wantUp !== !!gpPressed[gp]["axis_up"]) {
+      gpPressed[gp]["axis_up"] = wantUp;
+      fireKey(keys["up"], wantUp);
+    }
+    // Down
+    var wantDown = ay > DEAD;
+    if (wantDown !== !!gpPressed[gp]["axis_down"]) {
+      gpPressed[gp]["axis_down"] = wantDown;
+      fireKey(keys["down"], wantDown);
+    }
+  }
+
+  requestAnimationFrame(pollGamepads);
+}
+
+// ── Gamepad connect / disconnect events ───────────────────────────────────
+window.addEventListener("gamepadconnected", function(e) {
+  showGamepadMsg("🎮 Controller " + (e.gamepad.index + 1) + " connected: " + e.gamepad.id);
+  console.log("Gamepad connected:", e.gamepad.id);
+});
+window.addEventListener("gamepaddisconnected", function(e) {
+  showGamepadMsg("🎮 Controller " + (e.gamepad.index + 1) + " disconnected");
+  gpPressed[e.gamepad.index] = {};
+});
+
+// Start polling immediately (works even before ROM loads)
+requestAnimationFrame(pollGamepads);
+
+// ── ROM loading ───────────────────────────────────────────────────────────
 function startROM(name, data) {
   embedGenesis({
     container: "game",
@@ -82,43 +197,39 @@ function startROM(name, data) {
     rom: data,
     soundEnabled: true,
     showMobileControls: isMobile(),
-    cbStarted: () => loader.style.display = "none"
+    player1: DEFAULT_PLAYER1,
+    player2: DEFAULT_PLAYER2,
+    cbStarted: function() { loader.style.display = "none"; }
   });
 }
 
 function loadDemoROM() {
-  const url = "https://raw.githubusercontent.com/DoggyGamesShow123/32x/main/knuckles.32x";
-
+  var url = "https://raw.githubusercontent.com/DoggyGamesShow123/32x/main/knuckles.32x";
   fetch(url)
-    .then(r => r.arrayBuffer())
-    .then(buf => startROM("Demo", buf));
+    .then(function(r) { return r.arrayBuffer(); })
+    .then(function(buf) { startROM("Demo", buf); });
 }
 
 function enableUploadMode() {
   uploadBox.style.display = "block";
-
-  uploadBox.onclick = () => romInput.click();
-
-  romInput.onchange = e => {
-    const file = e.target.files[0];
+  uploadBox.onclick = function() { romInput.click(); };
+  romInput.onchange = function(e) {
+    var file = e.target.files[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => startROM(file.name, reader.result);
+    var reader = new FileReader();
+    reader.onload = function() { startROM(file.name, reader.result); };
     reader.readAsArrayBuffer(file);
   };
 }
 
-window.onload = () => {
-  const params = new URLSearchParams(location.search);
-
+window.onload = function() {
+  var params = new URLSearchParams(location.search);
   if (params.has("demo")) {
-    loadDemoROM();      // auto‑run demo
+    loadDemoROM();
   } else {
-    enableUploadMode(); // allow ROM upload
+    enableUploadMode();
   }
 };
 </script>
-
 </body>
 </html>
